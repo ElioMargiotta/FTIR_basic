@@ -33,6 +33,10 @@ OFFSET_STEP = float(os.getenv("OFFSET_STEP", "0.175"))
 PEAK_PROMINENCE = float(os.getenv("PEAK_PROMINENCE", "0.001"))
 PEAKS_PER_CURVE = int(os.getenv("PEAKS_PER_CURVE", "5"))
 
+# NEW: optional figure naming controls
+FIG_BASENAME = os.getenv("FIG_BASENAME", "ftir_stacked").strip() or "ftir_stacked"
+FIG_DIGITS = int(os.getenv("FIG_DIGITS", "3"))
+
 _guess_env = os.getenv("TARGET_GUESSES", "").strip()
 TARGET_GUESSES = None
 if _guess_env:
@@ -88,6 +92,20 @@ def _find_minima(wn: np.ndarray, tr: np.ndarray, prominence: float):
 def _nearest_index(x: np.ndarray, value: float) -> int:
     return int(np.argmin(np.abs(x - value)))
 
+def next_indexed_path(out_dir: str, base: str, ext: str = "png", digits: int = 3) -> str:
+    """
+    Return the next available path like base_001.png, base_002.png, ...
+    """
+    pattern = os.path.join(out_dir, f"{base}_*.{ext}")
+    existing = glob.glob(pattern)
+    idxs = []
+    for p in existing:
+        m = re.search(rf"{re.escape(base)}_(\d+)\.{re.escape(ext)}$", os.path.basename(p))
+        if m:
+            idxs.append(int(m.group(1)))
+    n = (max(idxs) + 1) if idxs else 1
+    return os.path.join(out_dir, f"{base}_{n:0{digits}d}.{ext}")
+
 # ---------- Gather files ----------
 csv_files = sorted(glob.glob(os.path.join(INPUT_DIR, "**", "*.csv"), recursive=True),
                    key=lambda p: os.path.basename(p).lower())
@@ -100,7 +118,6 @@ curves = []
 for path in csv_files:
     df = _read_csv_any(path)
     # sort by wavenumber descending if needed (common for FTIR plots)
-    # not strictly required, but helps consistent text placement
     df = df.sort_values("wavenumber", ascending=False).reset_index(drop=True)
     curves.append((os.path.basename(path), df))
 
@@ -136,7 +153,6 @@ for i, (name, df) in enumerate(curves, start=1):
     else:
         # annotate top-N minima by prominence (approx via sorting depth)
         if peak_idx.size > 0 and PEAKS_PER_CURVE > 0:
-            # rank by depth (1 - tr) at the peak
             depths = (1.0 - tr[peak_idx])
             order = np.argsort(depths)[::-1][:PEAKS_PER_CURVE]
             for idx in peak_idx[order]:
@@ -158,15 +174,15 @@ plt.title("FTIR Spectra (stacked)")
 plt.grid(True, alpha=0.4)
 plt.legend(loc="best", fontsize=8)
 plt.tight_layout()
-plt.show()
 
-png_path = os.path.join(OUT_DIR, "ftir_stacked.png")
+# --- SAVE with auto-incremented filename (no overwrite)
+png_path = next_indexed_path(OUT_DIR, FIG_BASENAME, ext="png", digits=FIG_DIGITS)
 plt.savefig(png_path, dpi=200)
 print(f"Saved plot: {png_path}")
 
 # ---------- Peak summary ----------
 if peak_rows:
     df_peaks = pd.DataFrame(peak_rows)
-    out_csv = os.path.join(OUT_DIR, "ftir_peaks_summary.csv")
+    out_csv = next_indexed_path(OUT_DIR, FIG_BASENAME, ext="csv", digits=FIG_DIGITS)
     df_peaks.to_csv(out_csv, index=False)
     print(f"Saved peak summary: {out_csv}")
