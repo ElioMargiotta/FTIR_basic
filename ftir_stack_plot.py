@@ -171,7 +171,7 @@ plt.gca().invert_xaxis()
 plt.xlabel("Wavenumber (cm⁻¹)")
 plt.ylabel(f"Transmittance (stacked, Δ={OFFSET_STEP})")
 plt.title("FTIR Spectra (stacked)")
-plt.grid(True, alpha=0.4)
+plt.grid(False, alpha=0.0)
 plt.legend(loc="best", fontsize=8)
 plt.tight_layout()
 
